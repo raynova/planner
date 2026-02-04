@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { api } from '../services/api';
 import { useSocket } from '../hooks/useSocket';
-import TimelinePlanner from '../components/TimelinePlanner';
+import TimelinePlanner from '../components/TimelinePlanner/index';
 
 export default function TimelinePage() {
   const { id } = useParams();
