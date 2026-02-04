@@ -3,7 +3,9 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createServer } from 'http';
 import { initializeDatabase } from './db/index.js';
+import { initializeSocketServer } from './socket/index.js';
 import timelineRoutes from './routes/timelines.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -42,11 +44,15 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+// Create HTTP server and initialize Socket.io
+const httpServer = createServer(app);
+initializeSocketServer(httpServer);
+
 // Start server
 async function start() {
   try {
     await initializeDatabase();
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
   } catch (error) {

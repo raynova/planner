@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, ChevronRight, Plus, X, AlertCircle, Check } from 'lucide-react';
 
-export default function TimelinePlanner({ timelineId, initialData, onSave }) {
+export default function TimelinePlanner({ timelineId, initialData, onSave, onSocketSync }) {
   // Start date - defaults to today
   const [startDate, setStartDate] = useState(
     initialData?.start_date ? new Date(initialData.start_date) : new Date()
@@ -12,6 +12,21 @@ export default function TimelinePlanner({ timelineId, initialData, onSave }) {
   const [tasks, setTasks] = useState(initialData?.tasks || []);
   const [saveStatus, setSaveStatus] = useState('');
   const [nodePositions, setNodePositions] = useState(initialData?.node_positions || {});
+
+  // Track the last remote update marker to detect external changes
+  const [lastRemoteUpdate, setLastRemoteUpdate] = useState(null);
+
+  // Sync state from initialData when it changes due to remote updates
+  React.useEffect(() => {
+    if (initialData?._remoteUpdate && initialData._remoteUpdate !== lastRemoteUpdate) {
+      console.log('Applying remote update to TimelinePlanner');
+      setTasks(initialData.tasks || []);
+      setNodePositions(initialData.node_positions || {});
+      setTimelineName(initialData.name || 'My Timeline');
+      setStartDate(initialData.start_date ? new Date(initialData.start_date) : new Date());
+      setLastRemoteUpdate(initialData._remoteUpdate);
+    }
+  }, [initialData, lastRemoteUpdate]);
 
   const saveData = async (newTasks, newStartDate, newTimelineName, newNodePositions) => {
     try {
@@ -25,6 +40,11 @@ export default function TimelinePlanner({ timelineId, initialData, onSave }) {
       await onSave(data);
       setSaveStatus('Saved');
       setTimeout(() => setSaveStatus(''), 2000);
+
+      // Emit socket sync to other clients
+      if (onSocketSync) {
+        onSocketSync(data);
+      }
     } catch (error) {
       console.error('Save error:', error);
       setSaveStatus('Error saving');
