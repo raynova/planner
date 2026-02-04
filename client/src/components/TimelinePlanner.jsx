@@ -59,7 +59,6 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [draggedNode, setDraggedNode] = useState(null);
-  const [selectedTaskForDep, setSelectedTaskForDep] = useState(null);
   const [lastClickedNodeId, setLastClickedNodeId] = useState(null);
   const [arrowContextMenu, setArrowContextMenu] = useState(null);
   const [hoveredArrow, setHoveredArrow] = useState(null);
@@ -69,6 +68,11 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
   const [diagramZoom, setDiagramZoom] = useState(1);
   const [isPanningDiagram, setIsPanningDiagram] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+
+  // Interactive dependency connection state
+  const [connectingFrom, setConnectingFrom] = useState(null);  // Task ID when in connection mode
+  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });  // Mouse position relative to diagram
+  const [hoveredNodeForConnection, setHoveredNodeForConnection] = useState(null);  // Node being hovered during connection
   const [newTask, setNewTask] = useState({
     name: '',
     startDate: new Date().toISOString().split('T')[0],
@@ -179,6 +183,7 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
   // Refs to track latest state values (avoid stale closures in event handlers)
   const tasksRef = React.useRef(tasks);
   const nodePositionsRef = React.useRef(nodePositions);
+  const connectingFromRef = React.useRef(connectingFrom);
 
   React.useEffect(() => {
     tasksRef.current = tasks;
@@ -187,6 +192,10 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
   React.useEffect(() => {
     nodePositionsRef.current = nodePositions;
   }, [nodePositions]);
+
+  React.useEffect(() => {
+    connectingFromRef.current = connectingFrom;
+  }, [connectingFrom]);
 
   const addTask = () => {
     if (!newTask.name.trim()) return;
@@ -420,10 +429,6 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  const handleTaskSelect = (taskId) => {
-    setSelectedTaskForDep(taskId);
-  };
-
   const handleAddDependency = (fromTaskId, toTaskId) => {
     if (fromTaskId === toTaskId) return;
     if (hasCircularDependency(toTaskId, fromTaskId)) {
@@ -539,6 +544,55 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
     setTasks(updatedTasks);
     saveData(updatedTasks, startDate, timelineName, nodePositions);
     setArrowContextMenu(null);
+  };
+
+  // Interactive dependency connection handlers
+  const startConnection = (taskId, e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setConnectingFrom(taskId);
+
+    const diagramArea = document.getElementById('dependency-diagram');
+    if (!diagramArea) return;
+
+    const handleMouseMove = (moveEvent) => {
+      const rect = diagramArea.getBoundingClientRect();
+      // Account for pan and zoom
+      const x = (moveEvent.clientX - rect.left - diagramPan.x) / diagramZoom;
+      const y = (moveEvent.clientY - rect.top - diagramPan.y) / diagramZoom;
+      setCursorPosition({ x, y });
+    };
+
+    const handleClick = (clickEvent) => {
+      // Check if we clicked on a task node
+      const nodeElement = clickEvent.target.closest('[data-task-node]');
+      if (nodeElement) {
+        const targetTaskId = nodeElement.dataset.taskId;
+        if (targetTaskId && targetTaskId !== connectingFromRef.current) {
+          handleAddDependency(connectingFromRef.current, targetTaskId);
+        }
+      }
+      // Cancel connection mode
+      cancelConnection();
+    };
+
+    const handleKeyDown = (keyEvent) => {
+      if (keyEvent.key === 'Escape') {
+        cancelConnection();
+      }
+    };
+
+    const cancelConnection = () => {
+      setConnectingFrom(null);
+      setHoveredNodeForConnection(null);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('click', handleClick, true);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('click', handleClick, true);
+    document.addEventListener('keydown', handleKeyDown);
   };
 
   // Pan/Zoom diagram handlers
@@ -1133,32 +1187,16 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
             </div>
           </div>
 
-          {/* Task selector bar */}
-          <div className="mb-4 p-4 bg-slate-50 rounded-lg">
-            <div className="text-sm text-slate-600 mb-2">Select tasks to connect dependencies:</div>
-            <div className="flex flex-wrap gap-2">
-              {tasks.map(task => (
-                <button
-                  key={task.id}
-                  onClick={() => handleTaskSelect(task.id)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
-                    selectedTaskForDep === task.id
-                      ? `${task.color} text-white ring-2 ring-offset-2 ring-slate-400`
-                      : `${task.color} text-white opacity-70 hover:opacity-100`
-                  }`}
-                >
-                  {task.name}
-                </button>
-              ))}
+          {/* Connection mode indicator */}
+          {connectingFrom && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+              <span className="text-sm text-blue-700">
+                <strong>Creating dependency from:</strong> {tasks.find(t => t.id === connectingFrom)?.name}
+                <span className="text-blue-500 ml-2">Click another task to connect, or press Escape to cancel</span>
+              </span>
             </div>
-            {selectedTaskForDep && (
-              <div className="mt-3 text-sm text-slate-700">
-                <strong>Selected:</strong> {tasks.find(t => t.id === selectedTaskForDep)?.name}
-                <br />
-                <span className="text-xs text-slate-500">Click another task to create a dependency (selected task will be blocked by clicked task)</span>
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Diagram area */}
           <div
@@ -1170,11 +1208,6 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
             onMouseUp={handleDiagramMouseUp}
             onMouseLeave={handleDiagramMouseUp}
             onWheel={handleDiagramWheel}
-            onClick={(e) => {
-              if (selectedTaskForDep && !e.target.closest('[data-task-node]')) {
-                setSelectedTaskForDep(null);
-              }
-            }}
           >
             {/* Pan/Zoom wrapper */}
             <div
@@ -1193,40 +1226,49 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
 
               const isDragging = draggedNode === task.id;
               const blockingTasksInDiagram = task.blockedBy.map(id => tasks.find(t => t.id === id)).filter(Boolean);
+              const isConnectionTarget = connectingFrom && connectingFrom !== task.id;
+              const isHoveredForConnection = hoveredNodeForConnection === task.id;
+              const isConnectionSource = connectingFrom === task.id;
 
               return (
                 <div
                   key={task.id}
                   data-task-node="true"
+                  data-task-id={task.id}
                   onMouseDown={(e) => {
-                    if (e.target.closest('.delete-node-btn')) return;
-                    if (!selectedTaskForDep) {
+                    if (e.target.closest('.delete-node-btn') || e.target.closest('.connect-btn')) return;
+                    if (!connectingFrom) {
                       handleNodeMouseDown(e, task.id);
                     }
                   }}
-                  onClick={(e) => {
-                    if (e.target.closest('.delete-node-btn')) return;
-                    if (!isDragging && selectedTaskForDep && selectedTaskForDep !== task.id) {
-                      setLastClickedNodeId(task.id);
-                      handleAddDependency(task.id, selectedTaskForDep);
-                      setSelectedTaskForDep(null);
+                  onMouseEnter={() => {
+                    if (connectingFrom && connectingFrom !== task.id) {
+                      setHoveredNodeForConnection(task.id);
+                    }
+                  }}
+                  onMouseLeave={() => {
+                    if (hoveredNodeForConnection === task.id) {
+                      setHoveredNodeForConnection(null);
                     }
                   }}
                   className={`absolute ${task.done ? 'bg-green-500' : task.color} text-white rounded-lg shadow-lg p-3 transition select-none ${
-                    selectedTaskForDep === task.id ? 'ring-4 ring-yellow-400' : ''
+                    isConnectionSource ? 'ring-4 ring-blue-400 ring-offset-2' : ''
                   } ${
-                    selectedTaskForDep && selectedTaskForDep !== task.id
+                    isConnectionTarget
                       ? 'cursor-pointer hover:ring-2 hover:ring-white'
                       : 'cursor-move hover:shadow-xl'
-                  } ${isDragging ? 'opacity-70 cursor-grabbing' : ''} ${task.done ? 'ring-2 ring-green-300' : ''}`}
+                  } ${
+                    isHoveredForConnection ? 'ring-4 ring-green-400 ring-offset-2 scale-105' : ''
+                  } ${isDragging ? 'opacity-70 cursor-grabbing' : ''} ${task.done && !isConnectionSource && !isHoveredForConnection ? 'ring-2 ring-green-300' : ''}`}
                   style={{
                     left: `${pos.x}px`,
                     top: `${pos.y}px`,
                     width: '160px',
                     minHeight: '60px',
-                    zIndex: 10
+                    zIndex: isHoveredForConnection ? 20 : 10
                   }}
                 >
+                  {/* Delete button */}
                   <button
                     className="delete-node-btn absolute top-1 right-1 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white transition border-2 border-black text-xs font-bold leading-none"
                     onClick={(e) => {
@@ -1237,7 +1279,19 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                   >
                     <X className="w-3 h-3" />
                   </button>
-                  <div className="font-semibold text-sm flex items-center gap-1">
+
+                  {/* Add dependency "+" button */}
+                  {!connectingFrom && (
+                    <button
+                      className="connect-btn absolute bottom-1 right-1 w-6 h-6 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white transition border-2 border-white shadow-md text-sm font-bold leading-none"
+                      onClick={(e) => startConnection(task.id, e)}
+                      title="Connect to another task (creates dependency)"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  <div className="font-semibold text-sm flex items-center gap-1 pr-6">
                     {task.done && <Check className="w-4 h-4 text-white" />}
                     {task.name}
                   </div>
@@ -1249,8 +1303,8 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                       </div>
                     </div>
                   )}
-                  {selectedTaskForDep && selectedTaskForDep !== task.id && (
-                    <div className="text-xs mt-1 bg-white bg-opacity-20 rounded px-1">
+                  {isHoveredForConnection && (
+                    <div className="text-xs mt-1 bg-white bg-opacity-30 rounded px-1 font-medium">
                       Click to connect
                     </div>
                   )}
@@ -1283,6 +1337,16 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                   orient="auto"
                 >
                   <polygon points="0 0, 10 3, 0 6" fill="#3b82f6" />
+                </marker>
+                <marker
+                  id="arrowhead-snapped"
+                  markerWidth="10"
+                  markerHeight="10"
+                  refX="9"
+                  refY="3"
+                  orient="auto"
+                >
+                  <polygon points="0 0, 10 3, 0 6" fill="#22c55e" />
                 </marker>
               </defs>
               {tasks.map(task => {
@@ -1368,6 +1432,79 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                   );
                 });
               })}
+
+              {/* Preview arrow during connection mode */}
+              {connectingFrom && (() => {
+                const fromPos = nodePositions[connectingFrom];
+                if (!fromPos) return null;
+
+                const nodeWidth = 160;
+                const nodeHeight = 60;
+
+                const fromCenterX = fromPos.x + nodeWidth / 2;
+                const fromCenterY = fromPos.y + nodeHeight / 2;
+
+                let targetX, targetY;
+                let isSnapped = false;
+
+                if (hoveredNodeForConnection) {
+                  const toPos = nodePositions[hoveredNodeForConnection];
+                  if (toPos) {
+                    targetX = toPos.x + nodeWidth / 2;
+                    targetY = toPos.y + nodeHeight / 2;
+                    isSnapped = true;
+                  }
+                }
+
+                if (!isSnapped) {
+                  targetX = cursorPosition.x;
+                  targetY = cursorPosition.y;
+                }
+
+                const angle = Math.atan2(targetY - fromCenterY, targetX - fromCenterX);
+
+                const getEdgePoint = (centerX, centerY, angle, width, height) => {
+                  const cos = Math.cos(angle);
+                  const sin = Math.sin(angle);
+                  const halfW = width / 2;
+                  const halfH = height / 2;
+
+                  let x, y;
+
+                  if (Math.abs(cos) > Math.abs(sin) * (halfW / halfH)) {
+                    x = centerX + Math.sign(cos) * halfW;
+                    y = centerY + Math.sign(cos) * halfW * Math.tan(angle);
+                  } else {
+                    y = centerY + Math.sign(sin) * halfH;
+                    x = centerX + Math.sign(sin) * halfH / Math.tan(angle);
+                  }
+
+                  return { x, y };
+                };
+
+                const fromPoint = getEdgePoint(fromCenterX, fromCenterY, angle, nodeWidth, nodeHeight);
+
+                let toPoint;
+                if (isSnapped) {
+                  toPoint = getEdgePoint(targetX, targetY, angle + Math.PI, nodeWidth, nodeHeight);
+                } else {
+                  toPoint = { x: targetX, y: targetY };
+                }
+
+                return (
+                  <line
+                    x1={fromPoint.x}
+                    y1={fromPoint.y}
+                    x2={toPoint.x}
+                    y2={toPoint.y}
+                    stroke={isSnapped ? "#22c55e" : "#3b82f6"}
+                    strokeWidth="3"
+                    strokeDasharray={isSnapped ? "none" : "8,4"}
+                    markerEnd={isSnapped ? "url(#arrowhead-snapped)" : "url(#arrowhead-highlight)"}
+                    style={{ pointerEvents: 'none' }}
+                  />
+                );
+              })()}
             </svg>
 
             {tasks.length === 0 && (
@@ -1385,7 +1522,7 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
               <li><strong>To pan diagram:</strong> Hold middle mouse button and drag to move the entire view</li>
               <li><strong>To zoom:</strong> Use the +/− buttons or hold Ctrl and scroll mouse wheel</li>
               <li><strong>To remove from diagram:</strong> Click the × button (task stays in timeline, only removed from diagram view)</li>
-              <li><strong>To add dependencies:</strong> Select a task from the top bar, then click another node in the diagram</li>
+              <li><strong>To add dependencies:</strong> Click the + button on a task, then click another task to connect them (the second task will be blocked by the first)</li>
               <li><strong>To delete a dependency:</strong> Right-click on any arrow and confirm deletion</li>
               <li><strong>Auto-Arrange:</strong> Organizes nodes in a tree layout based on dependencies</li>
             </ul>
