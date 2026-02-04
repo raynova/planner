@@ -64,6 +64,23 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
   const [hoveredArrow, setHoveredArrow] = useState(null);
   const [showDeleteNodeConfirm, setShowDeleteNodeConfirm] = useState(false);
   const [nodeToDelete, setNodeToDelete] = useState(null);
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editingTaskName, setEditingTaskName] = useState('');
+  const editInputRef = React.useRef(null);
+  const canBlurSaveRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (editingTaskId) {
+      canBlurSaveRef.current = false;
+      setTimeout(() => {
+        canBlurSaveRef.current = true;
+        if (editInputRef.current) {
+          editInputRef.current.focus();
+          editInputRef.current.select();
+        }
+      }, 50);
+    }
+  }, [editingTaskId]);
   const [diagramPan, setDiagramPan] = useState({ x: 0, y: 0 });
   const [diagramZoom, setDiagramZoom] = useState(1);
   const [isPanningDiagram, setIsPanningDiagram] = useState(false);
@@ -334,6 +351,31 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
     );
     setTasks(updatedTasks);
     saveData(updatedTasks, startDate, timelineName, nodePositions);
+  };
+
+  const startEditingTask = (taskId, currentName) => {
+    setEditingTaskId(taskId);
+    setEditingTaskName(currentName);
+  };
+
+  const cancelEditingTask = () => {
+    setEditingTaskId(null);
+    setEditingTaskName('');
+  };
+
+  const saveTaskName = (taskId) => {
+    const trimmedName = editingTaskName.trim();
+    if (!trimmedName) {
+      cancelEditingTask();
+      return;
+    }
+    const updatedTasks = tasks.map(t =>
+      t.id === taskId ? { ...t, name: trimmedName } : t
+    );
+    setTasks(updatedTasks);
+    saveData(updatedTasks, startDate, timelineName, nodePositions);
+    setEditingTaskId(null);
+    setEditingTaskName('');
   };
 
   // Initialize node positions for new tasks
@@ -1000,12 +1042,14 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
               const isBeingDragged = draggedTask?.id === task.id && !isDraggingTimeline;
               const isDropTarget = draggedOverTask?.id === task.id;
 
+              const isEditing = editingTaskId === task.id;
+
               return (
                 <div
                   key={task.id}
                   className={`mb-3 transition-all ${isBeingDragged ? 'opacity-50' : ''} ${isDropTarget ? 'border-t-2 border-blue-500' : ''} ${task.done ? 'bg-green-50 rounded-lg' : ''}`}
-                  draggable={!isDraggingTimeline && !isResizing}
-                  onDragStart={(e) => !isDraggingTimeline && !isResizing && handleDragStart(e, task)}
+                  draggable={!isDraggingTimeline && !isResizing && !isEditing}
+                  onDragStart={(e) => !isDraggingTimeline && !isResizing && !isEditing && handleDragStart(e, task)}
                   onDragOver={(e) => !isDraggingTimeline && !isResizing && handleDragOver(e, task)}
                   onDrop={(e) => !isDraggingTimeline && !isResizing && handleDrop(e, task)}
                   onDragEnd={handleDragEnd}
@@ -1017,7 +1061,49 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                         <div className="flex-1">
                           <div className={`font-semibold flex items-center gap-2 ${task.done ? 'text-green-700' : 'text-slate-800'}`}>
                             <span className="text-slate-400">⋮⋮</span>
-                            {task.name}
+                            {editingTaskId === task.id ? (
+                              <input
+                                ref={editInputRef}
+                                type="text"
+                                draggable="false"
+                                value={editingTaskName}
+                                onChange={(e) => setEditingTaskName(e.target.value)}
+                                onBlur={() => {
+                                  if (canBlurSaveRef.current) {
+                                    saveTaskName(task.id);
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    canBlurSaveRef.current = true;
+                                    e.target.blur();
+                                  } else if (e.key === 'Escape') {
+                                    canBlurSaveRef.current = false;
+                                    cancelEditingTask();
+                                  }
+                                }}
+                                onDragStart={(e) => e.preventDefault()}
+                                onClick={(e) => e.stopPropagation()}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className="px-1 py-0.5 border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 bg-white"
+                                style={{ width: '120px' }}
+                              />
+                            ) : (
+                              <span
+                                draggable="false"
+                                onDragStart={(e) => e.preventDefault()}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onDoubleClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  startEditingTask(task.id, task.name);
+                                }}
+                                className="cursor-text hover:text-blue-600 select-none"
+                                title="Double-click to rename"
+                              >
+                                {task.name}
+                              </span>
+                            )}
                             {task.done && <Check className="w-4 h-4 text-green-600" />}
                           </div>
                           <div className="text-xs text-slate-500">
