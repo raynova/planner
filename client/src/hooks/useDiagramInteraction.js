@@ -63,6 +63,7 @@ export function useDiagramInteraction({
   // Refs for stale closure prevention
   const connectingFromRef = useRef(connectingFrom);
   const selectedNodeIdsRef = useRef(selectedNodeIds);
+  const didPanRef = useRef(false);
 
   useEffect(() => { connectingFromRef.current = connectingFrom; }, [connectingFrom]);
   useEffect(() => { selectedNodeIdsRef.current = selectedNodeIds; }, [selectedNodeIds]);
@@ -381,11 +382,22 @@ export function useDiagramInteraction({
 
   // Diagram mouse handlers
   const handleDiagramMouseDown = useCallback((e) => {
+    // Middle mouse button - panning
     if (e.button === 1) {
       e.preventDefault();
+      didPanRef.current = false;
       setIsPanningDiagram(true);
       setPanStart({ x: e.clientX - diagramPan.x, y: e.clientY - diagramPan.y });
-    } else if (e.button === 0 && e.shiftKey && !e.target.closest('[data-task-node]')) {
+    }
+    // Right mouse button - panning
+    else if (e.button === 2 && !e.target.closest('[data-task-node]')) {
+      e.preventDefault();
+      didPanRef.current = false;
+      setIsPanningDiagram(true);
+      setPanStart({ x: e.clientX - diagramPan.x, y: e.clientY - diagramPan.y });
+    }
+    // Shift + Left click - box selection
+    else if (e.button === 0 && e.shiftKey && !e.target.closest('[data-task-node]')) {
       e.preventDefault();
       const diagramArea = document.getElementById('dependency-diagram');
       if (!diagramArea) return;
@@ -396,17 +408,18 @@ export function useDiagramInteraction({
       setIsBoxSelecting(true);
       setBoxStart({ x, y });
       setBoxEnd({ x, y });
-    } else if (e.button === 0 && !e.target.closest('[data-task-node]')) {
+    }
+    // Left click on empty canvas - clear selection only (no panning)
+    else if (e.button === 0 && !e.target.closest('[data-task-node]')) {
       e.preventDefault();
       setSelectedNodeIds(new Set());
       setSelectedNodeId(null);
-      setIsPanningDiagram(true);
-      setPanStart({ x: e.clientX - diagramPan.x, y: e.clientY - diagramPan.y });
     }
   }, [diagramPan, diagramZoom]);
 
   const handleDiagramMouseMove = useCallback((e) => {
     if (isPanningDiagram) {
+      didPanRef.current = true;
       setDiagramPan({
         x: e.clientX - panStart.x,
         y: e.clientY - panStart.y
@@ -447,6 +460,13 @@ export function useDiagramInteraction({
   }, [isBoxSelecting]);
 
   const handleDiagramContextMenu = useCallback((e) => {
+    // Suppress context menu if we were panning
+    if (didPanRef.current) {
+      e.preventDefault();
+      didPanRef.current = false;
+      return;
+    }
+
     if (!e.target.closest('[data-task-node]')) {
       e.preventDefault();
       const diagramArea = document.getElementById('dependency-diagram');
