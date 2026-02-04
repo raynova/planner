@@ -69,3 +69,17 @@ The app is deployed as a single Web Service at `https://planner-z9m6.onrender.co
 - **Start Command**: `npm start`
 
 The server serves both the API and the built React frontend. Static files are served from `client/dist`, with a catch-all route for client-side routing.
+
+## Code Patterns
+
+### Stale Closure Prevention in Drag Handlers
+
+`TimelinePlanner.jsx` uses refs (`tasksRef`, `nodePositionsRef`) to avoid stale closures in drag event handlers. When creating `mouseup` handlers inside `mousedown`, closure variables become stale if React state updates during the drag. Always use refs for state that needs to be current when the drag ends:
+
+```javascript
+const tasksRef = React.useRef(tasks);
+React.useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+
+// In mouseup handler:
+saveData(tasksRef.current, ...);  // not saveData(tasks, ...)
+```
