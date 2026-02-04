@@ -279,8 +279,34 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
   };
 
   const updateStartDate = (newDate) => {
+    // Calculate the week offset between old and new start dates
+    const oldFirstMonday = (() => {
+      const date = new Date(startDate);
+      const dayOfWeek = date.getDay();
+      const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      date.setDate(date.getDate() + daysToMonday);
+      return date;
+    })();
+
+    const newFirstMonday = (() => {
+      const date = new Date(newDate);
+      const dayOfWeek = date.getDay();
+      const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      date.setDate(date.getDate() + daysToMonday);
+      return date;
+    })();
+
+    const weekDiff = Math.round((oldFirstMonday - newFirstMonday) / (7 * 24 * 60 * 60 * 1000));
+
+    // Adjust all task startWeek values by the offset
+    const updatedTasks = tasks.map(task => ({
+      ...task,
+      startWeek: task.startWeek + weekDiff
+    }));
+
     setStartDate(newDate);
-    saveData(tasks, newDate, timelineName, nodePositions);
+    setTasks(updatedTasks);
+    saveData(updatedTasks, newDate, timelineName, nodePositions);
   };
 
   const changeTaskColor = (taskId, newColor) => {
