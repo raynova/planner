@@ -11,8 +11,9 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: cd server && npm install
-    startCommand: cd server && npm start
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
@@ -33,8 +34,9 @@ services:
     runtime: static
     plan: free
     region: oregon
-    buildCommand: cd client && npm install && npm run build
-    staticPublishPath: client/dist
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
     headers:
       - path: /*
         name: Cache-Control
