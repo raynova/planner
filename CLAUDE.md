@@ -39,7 +39,7 @@ Both servers need to run simultaneously. The Vite dev server proxies `/api` requ
 - `services/api.js` - API client with 5 endpoints (CRUD for timelines)
 
 ### Backend (`server/src/`)
-- `index.js` - Express setup with CORS, JSON middleware
+- `index.js` - Express setup with CORS, JSON middleware, static file serving for production
 - `db/index.js` - PostgreSQL pool and schema initialization
 - `db/schema.sql` - Single `timelines` table with JSONB columns
 - `routes/timelines.js` - REST API endpoints
@@ -58,3 +58,14 @@ Single `timelines` table: `id` (UUID), `name`, `start_date`, `tasks` (JSONB), `n
 ## Environment Variables
 
 Server requires `DATABASE_URL` for PostgreSQL connection. See `server/.env.example` for all variables.
+
+## Deployment (Render.com)
+
+The app is deployed as a single Web Service at `https://planner-z9m6.onrender.com/`
+
+**Render Settings:**
+- **Root Directory**: `server`
+- **Build Command**: `npm install && cd ../client && npm install && npm run build`
+- **Start Command**: `npm start`
+
+The server serves both the API and the built React frontend. Static files are served from `client/dist`, with a catch-all route for client-side routing.
