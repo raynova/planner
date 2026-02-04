@@ -8,11 +8,11 @@ Timeline Planner - A full-stack application for creating and managing project ti
 
 ## Tech Stack
 
-- **Frontend**: React 18, Vite, Tailwind CSS, React Router, Socket.io-client
+- **Frontend**: React 18, Vite, Tailwind CSS, React Router, Socket.io-client, Lucide React (icons)
 - **Backend**: Express.js, Node.js, Socket.io
 - **Database**: PostgreSQL (JSONB for tasks/positions)
 - **Real-time**: Socket.io for multi-user collaboration
-- **Deployment**: Render.com
+- **Deployment**: Render.com (separate frontend/backend services)
 
 ## Development Commands
 
@@ -61,18 +61,35 @@ Single `timelines` table: `id` (UUID), `name`, `start_date`, `tasks` (JSONB), `n
 
 ## Environment Variables
 
-Server requires `DATABASE_URL` for PostgreSQL connection. See `server/.env.example` for all variables.
+Server requires these environment variables (see `server/.env.example`):
+- `DATABASE_URL` - PostgreSQL connection string
+- `CLIENT_URL` - Frontend URL for CORS (default: `http://localhost:5173`)
+- `NODE_ENV` - Environment mode (`development` or `production`)
 
 ## Deployment (Render.com)
 
-The app is deployed as a single Web Service at `https://planner-z9m6.onrender.com/`
+Deployed as separate services via `render.yaml`:
 
-**Render Settings:**
-- **Root Directory**: `server`
-- **Build Command**: `npm install && cd ../client && npm install && npm run build`
-- **Start Command**: `npm start`
+**Database:**
+- `planner-db` - PostgreSQL (Oregon region)
 
-The server serves both the API and the built React frontend. Static files are served from `client/dist`, with a catch-all route for client-side routing.
+**Backend API (`planner-api`):**
+- Runtime: Node.js (free plan)
+- Root: `server/`
+- Build: `npm install`
+- Start: `npm start`
+- Health check: `/health`
+
+**Frontend (`planner-client`):**
+- Runtime: Static site (free plan)
+- Root: `client/`
+- Build: `npm install && npm run build`
+- Publish: `dist/`
+- Routes: `/api/*` rewrites to backend, `/*` serves `index.html`
+
+Live URLs:
+- API: `https://planner-api.onrender.com`
+- Frontend: `https://planner-client.onrender.com`
 
 ## Code Patterns
 
