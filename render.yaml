@@ -27,7 +27,6 @@ services:
     name: planner-client
     runtime: static
     plan: free
-    region: oregon
     rootDir: client
     buildCommand: npm install && npm run build
     staticPublishPath: dist
