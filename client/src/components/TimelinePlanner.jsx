@@ -156,6 +156,18 @@ export default function TimelinePlanner({ timelineId, initialData, onSave }) {
     edge: null
   });
 
+  // Refs to track latest state values (avoid stale closures in event handlers)
+  const tasksRef = React.useRef(tasks);
+  const nodePositionsRef = React.useRef(nodePositions);
+
+  React.useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
+
+  React.useEffect(() => {
+    nodePositionsRef.current = nodePositions;
+  }, [nodePositions]);
+
   const addTask = () => {
     if (!newTask.name.trim()) return;
 
@@ -353,7 +365,7 @@ export default function TimelinePlanner({ timelineId, initialData, onSave }) {
 
     const handleMouseUp = () => {
       setDraggedNode(null);
-      saveData(tasks, startDate, timelineName, nodePositions);
+      saveData(tasksRef.current, startDate, timelineName, nodePositionsRef.current);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
@@ -641,7 +653,7 @@ export default function TimelinePlanner({ timelineId, initialData, onSave }) {
     const handleMouseUp = () => {
       setIsDraggingTimeline(false);
       setDraggedTask(null);
-      saveData(tasks, startDate, timelineName, nodePositions);
+      saveData(tasksRef.current, startDate, timelineName, nodePositionsRef.current);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
@@ -709,7 +721,7 @@ export default function TimelinePlanner({ timelineId, initialData, onSave }) {
       setIsResizing(false);
       setResizeEdge(null);
       setDraggedTask(null);
-      saveData(tasks, startDate, timelineName, nodePositions);
+      saveData(tasksRef.current, startDate, timelineName, nodePositionsRef.current);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
