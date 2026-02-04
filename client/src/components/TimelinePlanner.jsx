@@ -1313,9 +1313,21 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
             })}
 
             {/* Draw arrows for dependencies */}
+            {(() => {
+              // Calculate SVG size based on maximum node positions
+              const nodeWidth = 160;
+              const nodeHeight = 60;
+              const padding = 200; // Extra padding for arrows
+              let maxX = 800;
+              let maxY = 500;
+              Object.values(nodePositions).forEach(pos => {
+                if (pos.x + nodeWidth + padding > maxX) maxX = pos.x + nodeWidth + padding;
+                if (pos.y + nodeHeight + padding > maxY) maxY = pos.y + nodeHeight + padding;
+              });
+              return (
             <svg
               className="absolute inset-0"
-              style={{ width: '100%', height: '100%', zIndex: 5, pointerEvents: 'none' }}
+              style={{ width: `${maxX}px`, height: `${maxY}px`, zIndex: 5, pointerEvents: 'none', overflow: 'visible' }}
             >
               <defs>
                 <marker
@@ -1506,6 +1518,8 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                 );
               })()}
             </svg>
+              );
+            })()}
 
             {tasks.length === 0 && (
               <div className="absolute inset-0 flex items-center justify-center text-slate-400">
