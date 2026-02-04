@@ -19,12 +19,6 @@ services:
         fromDatabase:
           name: planner-db
           property: connectionString
-      - key: JWT_SECRET
-        generateValue: true
-      - key: SENDGRID_API_KEY
-        sync: false
-      - key: FROM_EMAIL
-        sync: false
       - key: CLIENT_URL
         fromService:
           name: planner-client

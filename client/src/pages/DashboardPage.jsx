@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Plus, Trash2, LogOut } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { Calendar, Plus, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
 
 export default function DashboardPage() {
@@ -10,7 +9,6 @@ export default function DashboardPage() {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -72,11 +70,6 @@ export default function DashboardPage() {
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
-
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -102,23 +95,13 @@ export default function DashboardPage() {
             <Calendar className="h-8 w-8 text-blue-500" />
             <h1 className="text-xl font-bold text-gray-900">Timeline Planner</h1>
           </div>
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">{user?.email}</span>
-            <button
-              onClick={handleLogout}
-              className="flex items-center space-x-1 text-gray-600 hover:text-gray-900"
-            >
-              <LogOut className="h-4 w-4" />
-              <span className="text-sm">Logout</span>
-            </button>
-          </div>
         </div>
       </header>
 
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-lg font-semibold text-gray-900">Your Team's Timelines</h2>
+          <h2 className="text-lg font-semibold text-gray-900">All Timelines</h2>
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"

@@ -1,9 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import cookieParser from 'cookie-parser';
 import { initializeDatabase } from './db/index.js';
-import authRoutes from './routes/auth.js';
 import timelineRoutes from './routes/timelines.js';
 
 const app = express();
@@ -15,15 +13,13 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
-app.use(cookieParser());
 
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Routes
-app.use('/api/auth', authRoutes);
+// Routes (no auth required)
 app.use('/api/timelines', timelineRoutes);
 
 // Error handler

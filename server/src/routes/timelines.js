@@ -1,13 +1,9 @@
 import { Router } from 'express';
 import pool from '../db/index.js';
-import { authMiddleware } from '../middleware/auth.js';
 
 const router = Router();
 
-// All routes require authentication
-router.use(authMiddleware);
-
-// Get all timelines (shared workspace)
+// Get all timelines (public - no auth)
 router.get('/', async (req, res) => {
   try {
     const result = await pool.query(
@@ -20,7 +16,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Create new timeline
+// Create new timeline (public - no auth)
 router.post('/', async (req, res) => {
   try {
     const { name, startDate, tasks, nodePositions } = req.body;
@@ -44,7 +40,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Get single timeline
+// Get single timeline (public - no auth)
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -65,7 +61,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Update timeline
+// Update timeline (public - no auth)
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -116,7 +112,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Delete timeline
+// Delete timeline (public - no auth)
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
