@@ -102,9 +102,9 @@ Client A ──┐                    ┌── Client B
 - Remote updates are detected via `_remoteUpdate` timestamp marker on `initialData`
 - Full state sync (last-write-wins) rather than granular operations
 
-### Stale Closure Prevention in Drag Handlers
+### Stale Closure Prevention in Event Handlers
 
-`TimelinePlanner.jsx` uses refs (`tasksRef`, `nodePositionsRef`) to avoid stale closures in drag event handlers. When creating `mouseup` handlers inside `mousedown`, closure variables become stale if React state updates during the drag. Always use refs for state that needs to be current when the drag ends:
+`TimelinePlanner.jsx` uses refs (`tasksRef`, `nodePositionsRef`, `connectingFromRef`) to avoid stale closures in document-level event handlers. When creating handlers inside a function (e.g., `mouseup` inside `mousedown`), closure variables become stale if React state updates. Always use refs for state that needs to be current when the handler fires:
 
 ```javascript
 const tasksRef = React.useRef(tasks);
@@ -113,3 +113,14 @@ React.useEffect(() => { tasksRef.current = tasks; }, [tasks]);
 // In mouseup handler:
 saveData(tasksRef.current, ...);  // not saveData(tasks, ...)
 ```
+
+### Interactive Dependency Connection
+
+Dependencies are created via an interactive "+" button on each node:
+1. Click "+" on source node → enters connection mode
+2. Document-level `mousemove` tracks cursor for preview arrow
+3. Hover target node → arrow snaps, node highlights
+4. Click target → calls `handleAddDependency(sourceId, targetId)`
+5. Escape or click outside → cancels connection mode
+
+The preview arrow uses SVG with conditional styling (dashed blue → solid green when snapped).
