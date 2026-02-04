@@ -62,6 +62,19 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
   const [lastClickedNodeId, setLastClickedNodeId] = useState(null);
   const [arrowContextMenu, setArrowContextMenu] = useState(null);
   const [hoveredArrow, setHoveredArrow] = useState(null);
+
+  // Task 1: Arrow key dependency movement - selected node state
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
+
+  // Task 2: Box selection for multiple tasks
+  const [isBoxSelecting, setIsBoxSelecting] = useState(false);
+  const [boxStart, setBoxStart] = useState({ x: 0, y: 0 });
+  const [boxEnd, setBoxEnd] = useState({ x: 0, y: 0 });
+  const [selectedNodeIds, setSelectedNodeIds] = useState(new Set());
+
+  // Task 3: Canvas context menu for creating tasks
+  const [canvasContextMenu, setCanvasContextMenu] = useState(null);
+  const [newTaskPosition, setNewTaskPosition] = useState(null);
   const [showDeleteNodeConfirm, setShowDeleteNodeConfirm] = useState(false);
   const [nodeToDelete, setNodeToDelete] = useState(null);
   const [editingTaskId, setEditingTaskId] = useState(null);
@@ -96,7 +109,16 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
     endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     color: 'bg-blue-500',
     blockedBy: [],
+    notes: '',
   });
+
+  // Filter state
+  const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'done', 'pending'
+  const [filterColors, setFilterColors] = useState([]); // empty means all colors shown
+
+  // Notes editing state
+  const [editingNotesTask, setEditingNotesTask] = useState(null);
+  const [editingNotesValue, setEditingNotesValue] = useState('');
 
   // Drag and drop states
   const [draggedTask, setDraggedTask] = useState(null);
@@ -156,10 +178,82 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
     return date.getMonth();
   };
 
+  // Helper function to get actual calendar months for monthly view
+  const getMonthColumns = () => {
+    const months = [];
+    let currentDate = new Date(startDate);
+    // Go to first day of start month
+    currentDate.setDate(1);
+
+    const endWeekDate = getWeekDate(totalWeeks);
+
+    while (currentDate <= endWeekDate) {
+      months.push(new Date(currentDate));
+      currentDate.setMonth(currentDate.getMonth() + 1);
+    }
+    return months;
+  };
+
+  // Helper function to calculate task position in monthly view
+  const getMonthlyTaskPosition = (task) => {
+    const months = getMonthColumns();
+    const totalMonths = months.length;
+    if (totalMonths === 0) return { left: 0, width: 0 };
+
+    const taskStartDate = getWeekDate(task.startWeek);
+    const taskEndDate = new Date(taskStartDate);
+    taskEndDate.setDate(taskEndDate.getDate() + task.duration * 7 - 1);
+
+    // Find which month the task starts in
+    let startMonthIndex = 0;
+    let startOffset = 0;
+    for (let i = 0; i < months.length; i++) {
+      const monthStart = months[i];
+      const nextMonthStart = new Date(monthStart);
+      nextMonthStart.setMonth(nextMonthStart.getMonth() + 1);
+
+      if (taskStartDate >= monthStart && taskStartDate < nextMonthStart) {
+        startMonthIndex = i;
+        // Calculate offset within the month
+        const daysInMonth = (nextMonthStart - monthStart) / (1000 * 60 * 60 * 24);
+        const dayOffset = (taskStartDate - monthStart) / (1000 * 60 * 60 * 24);
+        startOffset = dayOffset / daysInMonth;
+        break;
+      } else if (taskStartDate < monthStart && i === 0) {
+        startMonthIndex = 0;
+        startOffset = 0;
+        break;
+      }
+    }
+
+    // Find which month the task ends in
+    let endMonthIndex = months.length - 1;
+    let endOffset = 1;
+    for (let i = 0; i < months.length; i++) {
+      const monthStart = months[i];
+      const nextMonthStart = new Date(monthStart);
+      nextMonthStart.setMonth(nextMonthStart.getMonth() + 1);
+
+      if (taskEndDate >= monthStart && taskEndDate < nextMonthStart) {
+        endMonthIndex = i;
+        // Calculate offset within the month
+        const daysInMonth = (nextMonthStart - monthStart) / (1000 * 60 * 60 * 24);
+        const dayOffset = (taskEndDate - monthStart) / (1000 * 60 * 60 * 24) + 1;
+        endOffset = Math.min(dayOffset / daysInMonth, 1);
+        break;
+      }
+    }
+
+    const left = ((startMonthIndex + startOffset) / totalMonths) * 100;
+    const right = ((endMonthIndex + endOffset) / totalMonths) * 100;
+    const width = right - left;
+
+    return { left, width: Math.max(width, 2) }; // Minimum 2% width for visibility
+  };
+
   const colors = [
     'bg-blue-500',
     'bg-purple-500',
-    'bg-green-500',
     'bg-red-500',
     'bg-yellow-500',
     'bg-pink-500',
@@ -178,7 +272,6 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
   const getBaseWeeks = () => {
     if (viewMode === 'weekly') return 16;
     if (viewMode === 'monthly') return 24;
-    if (viewMode === 'halfyear') return 26;
     return 16;
   };
 
@@ -214,6 +307,79 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
     connectingFromRef.current = connectingFrom;
   }, [connectingFrom]);
 
+  // Ref for selected node IDs to avoid stale closures
+  const selectedNodeIdsRef = React.useRef(selectedNodeIds);
+  React.useEffect(() => {
+    selectedNodeIdsRef.current = selectedNodeIds;
+  }, [selectedNodeIds]);
+
+  // Task 1: Arrow key handler for moving selected node and its dependencies
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!selectedNodeId || !nodePositions[selectedNodeId]) return;
+
+      // Don't handle arrow keys if user is typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      const moveAmount = e.shiftKey ? 50 : 10;
+      let dx = 0, dy = 0;
+
+      switch (e.key) {
+        case 'ArrowUp': dy = -moveAmount; break;
+        case 'ArrowDown': dy = moveAmount; break;
+        case 'ArrowLeft': dx = -moveAmount; break;
+        case 'ArrowRight': dx = moveAmount; break;
+        default: return;
+      }
+
+      e.preventDefault();
+
+      // Get all connected tasks (blocked by and blocking)
+      const selectedTask = tasks.find(t => t.id === selectedNodeId);
+      if (!selectedTask) return;
+
+      const connectedIds = new Set([selectedNodeId]);
+
+      // Add tasks that block the selected task
+      selectedTask.blockedBy.forEach(id => connectedIds.add(id));
+
+      // Add tasks blocked by the selected task
+      tasks.forEach(t => {
+        if (t.blockedBy.includes(selectedNodeId)) {
+          connectedIds.add(t.id);
+        }
+      });
+
+      // Move all connected nodes
+      setNodePositions(prev => {
+        const newPositions = { ...prev };
+        connectedIds.forEach(id => {
+          if (newPositions[id]) {
+            newPositions[id] = {
+              x: Math.max(0, newPositions[id].x + dx),
+              y: Math.max(0, newPositions[id].y + dy)
+            };
+          }
+        });
+        return newPositions;
+      });
+    };
+
+    const handleKeyUp = (e) => {
+      // Save on key up for arrow keys
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && selectedNodeId) {
+        saveData(tasksRef.current, startDate, timelineName, nodePositionsRef.current);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [selectedNodeId, tasks, nodePositions, startDate, timelineName]);
+
   const addTask = () => {
     if (!newTask.name.trim()) return;
 
@@ -232,27 +398,36 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
         color: newTask.color,
         blockedBy: [],
         done: false,
+        notes: newTask.notes || '',
       },
     ];
 
-    // Calculate position for new task
-    const diagramElement = document.getElementById('dependency-diagram');
-    const diagramWidth = diagramElement ? diagramElement.clientWidth : 800;
-    const nodeWidth = 160;
-    const nodeHeight = 60;
-    const padding = 20;
-    const cols = Math.floor((diagramWidth - 2 * padding) / (nodeWidth + 40));
+    // Task 3: Use newTaskPosition if available (from canvas right-click), otherwise calculate grid position
+    let taskPosition;
+    if (newTaskPosition) {
+      taskPosition = { x: newTaskPosition.x, y: newTaskPosition.y };
+    } else {
+      // Calculate position for new task
+      const diagramElement = document.getElementById('dependency-diagram');
+      const diagramWidth = diagramElement ? diagramElement.clientWidth : 800;
+      const nodeWidth = 160;
+      const nodeHeight = 60;
+      const padding = 20;
+      const cols = Math.floor((diagramWidth - 2 * padding) / (nodeWidth + 40));
 
-    const existingPositions = Object.keys(nodePositions).length;
-    const col = existingPositions % cols;
-    const row = Math.floor(existingPositions / cols);
+      const existingPositions = Object.keys(nodePositions).length;
+      const col = existingPositions % cols;
+      const row = Math.floor(existingPositions / cols);
+
+      taskPosition = {
+        x: padding + col * (nodeWidth + 40),
+        y: padding + row * (nodeHeight + 40)
+      };
+    }
 
     const newPositions = {
       ...nodePositions,
-      [newTaskId]: {
-        x: padding + col * (nodeWidth + 40),
-        y: padding + row * (nodeHeight + 40)
-      }
+      [newTaskId]: taskPosition
     };
 
     setTasks(updatedTasks);
@@ -265,8 +440,10 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
       endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       color: 'bg-blue-500',
       blockedBy: [],
+      notes: '',
     });
     setShowAddTask(false);
+    setNewTaskPosition(null); // Clear the position after use
   };
 
   const deleteTask = (id) => {
@@ -378,6 +555,39 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
     setEditingTaskName('');
   };
 
+  const startEditingNotes = (task) => {
+    setEditingNotesTask(task);
+    setEditingNotesValue(task.notes || '');
+  };
+
+  const saveTaskNotes = () => {
+    if (!editingNotesTask) return;
+    const updatedTasks = tasks.map(t =>
+      t.id === editingNotesTask.id ? { ...t, notes: editingNotesValue } : t
+    );
+    setTasks(updatedTasks);
+    saveData(updatedTasks, startDate, timelineName, nodePositions);
+    setEditingNotesTask(null);
+    setEditingNotesValue('');
+  };
+
+  const cancelEditingNotes = () => {
+    setEditingNotesTask(null);
+    setEditingNotesValue('');
+  };
+
+  // Filtered tasks based on status and color filters
+  const filteredTasks = tasks.filter(task => {
+    // Status filter
+    if (filterStatus === 'done' && !task.done) return false;
+    if (filterStatus === 'pending' && task.done) return false;
+
+    // Color filter (if any colors selected, only show those)
+    if (filterColors.length > 0 && !filterColors.includes(task.color)) return false;
+
+    return true;
+  });
+
   // Initialize node positions for new tasks
   React.useEffect(() => {
     const newPositions = { ...nodePositions };
@@ -436,28 +646,43 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
     e.stopPropagation();
     setDraggedNode(taskId);
 
+    // Task 1: Select node on click (for arrow key movement)
+    setSelectedNodeId(taskId);
+
     const diagramArea = document.getElementById('dependency-diagram');
     if (!diagramArea) return;
 
-    const rect = diagramArea.getBoundingClientRect();
     const startX = e.clientX;
     const startY = e.clientY;
     const startPos = nodePositions[taskId] || { x: 100, y: 100 };
+
+    // Task 2: Check if this node is part of a multi-selection
+    const isPartOfSelection = selectedNodeIdsRef.current.has(taskId);
+    const nodesToMove = isPartOfSelection ? selectedNodeIdsRef.current : new Set([taskId]);
+
+    // Store start positions for all nodes being moved
+    const startPositions = {};
+    nodesToMove.forEach(id => {
+      startPositions[id] = nodePositions[id] || { x: 100, y: 100 };
+    });
 
     const handleMouseMove = (moveEvent) => {
       const deltaX = (moveEvent.clientX - startX) / diagramZoom;
       const deltaY = (moveEvent.clientY - startY) / diagramZoom;
 
-      let newX = startPos.x + deltaX;
-      let newY = startPos.y + deltaY;
-
-      newX = Math.max(0, newX);
-      newY = Math.max(0, newY);
-
-      setNodePositions(prev => ({
-        ...prev,
-        [taskId]: { x: newX, y: newY }
-      }));
+      setNodePositions(prev => {
+        const newPositions = { ...prev };
+        nodesToMove.forEach(id => {
+          const startP = startPositions[id];
+          if (startP) {
+            newPositions[id] = {
+              x: Math.max(0, startP.x + deltaX),
+              y: Math.max(0, startP.y + deltaY)
+            };
+          }
+        });
+        return newPositions;
+      });
     };
 
     const handleMouseUp = () => {
@@ -639,8 +864,31 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
 
   // Pan/Zoom diagram handlers
   const handleDiagramMouseDown = (e) => {
+    // Middle mouse button always pans
     if (e.button === 1) {
       e.preventDefault();
+      setIsPanningDiagram(true);
+      setPanStart({ x: e.clientX - diagramPan.x, y: e.clientY - diagramPan.y });
+    }
+    // Task 2: Left mouse button with Shift starts box selection
+    else if (e.button === 0 && e.shiftKey && !e.target.closest('[data-task-node]')) {
+      e.preventDefault();
+      const diagramArea = document.getElementById('dependency-diagram');
+      if (!diagramArea) return;
+
+      const rect = diagramArea.getBoundingClientRect();
+      const x = (e.clientX - rect.left - diagramPan.x) / diagramZoom;
+      const y = (e.clientY - rect.top - diagramPan.y) / diagramZoom;
+      setIsBoxSelecting(true);
+      setBoxStart({ x, y });
+      setBoxEnd({ x, y });
+    }
+    // Left mouse button pans only if not clicking on a node (and not Shift)
+    else if (e.button === 0 && !e.target.closest('[data-task-node]')) {
+      e.preventDefault();
+      // Clear selection when clicking on empty space without Shift
+      setSelectedNodeIds(new Set());
+      setSelectedNodeId(null);
       setIsPanningDiagram(true);
       setPanStart({ x: e.clientX - diagramPan.x, y: e.clientY - diagramPan.y });
     }
@@ -653,10 +901,65 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
         y: e.clientY - panStart.y
       });
     }
+
+    // Task 2: Handle box selection
+    if (isBoxSelecting) {
+      const diagramArea = document.getElementById('dependency-diagram');
+      if (!diagramArea) return;
+
+      const rect = diagramArea.getBoundingClientRect();
+      const x = (e.clientX - rect.left - diagramPan.x) / diagramZoom;
+      const y = (e.clientY - rect.top - diagramPan.y) / diagramZoom;
+      setBoxEnd({ x, y });
+
+      // Calculate selected nodes
+      const minX = Math.min(boxStart.x, x);
+      const maxX = Math.max(boxStart.x, x);
+      const minY = Math.min(boxStart.y, y);
+      const maxY = Math.max(boxStart.y, y);
+
+      const nodeWidth = 160;
+      const nodeHeight = 60;
+
+      const selected = new Set();
+      Object.entries(nodePositions).forEach(([id, pos]) => {
+        const nodeRight = pos.x + nodeWidth;
+        const nodeBottom = pos.y + nodeHeight;
+        // Check if node intersects selection box
+        if (pos.x < maxX && nodeRight > minX && pos.y < maxY && nodeBottom > minY) {
+          selected.add(id);
+        }
+      });
+      setSelectedNodeIds(selected);
+    }
   };
 
   const handleDiagramMouseUp = () => {
     setIsPanningDiagram(false);
+    // Task 2: End box selection
+    if (isBoxSelecting) {
+      setIsBoxSelecting(false);
+    }
+  };
+
+  // Task 3: Handle right-click context menu on diagram canvas
+  const handleDiagramContextMenu = (e) => {
+    // Only show context menu on empty space (not on nodes)
+    if (!e.target.closest('[data-task-node]')) {
+      e.preventDefault();
+      const diagramArea = document.getElementById('dependency-diagram');
+      if (!diagramArea) return;
+
+      const rect = diagramArea.getBoundingClientRect();
+      const diagramX = (e.clientX - rect.left - diagramPan.x) / diagramZoom;
+      const diagramY = (e.clientY - rect.top - diagramPan.y) / diagramZoom;
+      setCanvasContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        diagramX,
+        diagramY
+      });
+    }
   };
 
   const handleDiagramWheel = (e) => {
@@ -676,18 +979,22 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
     setDiagramZoom(prev => Math.max(0.25, prev - 0.1));
   };
 
-  // Close context menu when clicking anywhere
+  // Close context menus when clicking anywhere
   React.useEffect(() => {
     const handleClick = (e) => {
       if (arrowContextMenu && !e.target.closest('.arrow-context-menu')) {
         setArrowContextMenu(null);
+      }
+      // Task 3: Close canvas context menu
+      if (canvasContextMenu && !e.target.closest('.canvas-context-menu')) {
+        setCanvasContextMenu(null);
       }
     };
     document.addEventListener('click', handleClick);
     return () => {
       document.removeEventListener('click', handleClick);
     };
-  }, [arrowContextMenu]);
+  }, [arrowContextMenu, canvasContextMenu]);
 
   // Prevent browser zoom in diagram area
   React.useEffect(() => {
@@ -930,7 +1237,7 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                   </div>
                 </div>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 items-center">
                 <button
                   onClick={() => setViewMode('weekly')}
                   className={`px-4 py-2 rounded-lg font-medium transition ${
@@ -951,16 +1258,46 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                 >
                   Monthly
                 </button>
-                <button
-                  onClick={() => setViewMode('halfyear')}
-                  className={`px-4 py-2 rounded-lg font-medium transition ${
-                    viewMode === 'halfyear'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                  }`}
-                >
-                  Half Year
-                </button>
+
+                {/* Filter controls */}
+                <div className="flex items-center gap-2 ml-3 pl-3 border-l border-slate-300">
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="px-2 py-1 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="all">All Tasks</option>
+                    <option value="pending">Pending</option>
+                    <option value="done">Completed</option>
+                  </select>
+
+                  {/* Color filter - small color dots that can be toggled */}
+                  <div className="flex items-center gap-1">
+                    {colors.map(color => (
+                      <button
+                        key={color}
+                        onClick={() => {
+                          setFilterColors(prev =>
+                            prev.includes(color)
+                              ? prev.filter(c => c !== color)
+                              : [...prev, color]
+                          );
+                        }}
+                        className={`w-4 h-4 rounded-full ${color} ${filterColors.includes(color) ? 'ring-2 ring-slate-600' : 'opacity-40'} ${filterColors.length === 0 ? 'opacity-100' : ''} transition`}
+                        title={filterColors.includes(color) ? 'Click to hide this color' : 'Click to show only this color'}
+                      />
+                    ))}
+                    {filterColors.length > 0 && (
+                      <button
+                        onClick={() => setFilterColors([])}
+                        className="text-xs text-slate-500 hover:text-slate-700 ml-1"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <button
                   onClick={() => setShowAddTask(true)}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition flex items-center gap-2"
@@ -988,54 +1325,148 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
 
           <div className="min-w-max">
             {/* Timeline Header */}
-            <div className="flex mb-4">
-              <div className="w-64 flex-shrink-0"></div>
-              <div className="flex flex-1">
-                {viewMode === 'weekly' ? (
-                  Array.from({ length: totalWeeks }, (_, i) => {
-                    const weekNum = i + 1;
-                    const weekDate = getWeekDate(weekNum);
-                    const currentMonth = getMonthForWeek(weekNum);
-                    const prevMonth = i > 0 ? getMonthForWeek(weekNum - 1) : -1;
-                    const isMonthStart = currentMonth !== prevMonth;
+            {viewMode === 'weekly' && (
+              <>
+                {/* Month labels row */}
+                <div className="flex">
+                  <div className="w-64 flex-shrink-0"></div>
+                  <div className="flex flex-1">
+                    {(() => {
+                      // Group weeks by month and create spanning month labels
+                      const monthGroups = [];
+                      let currentMonthStart = 0;
+                      let currentMonth = getMonthForWeek(1);
 
-                    return (
-                      <div
-                        key={i}
-                        className={`flex-1 text-center text-xs font-medium border-l px-1 ${
-                          isMonthStart ? 'border-l-4 border-l-blue-600' : 'border-slate-200'
-                        } ${currentMonth % 2 === 0 ? 'bg-slate-50' : 'bg-white'}`}
-                        style={{ minWidth: '70px' }}
-                      >
-                        <div className={`${isMonthStart ? 'text-blue-700 font-bold' : 'text-slate-600'}`}>
-                          {String(weekDate.getDate()).padStart(2, '0')}/{String(weekDate.getMonth() + 1).padStart(2, '0')}
+                      for (let i = 0; i < totalWeeks; i++) {
+                        const weekNum = i + 1;
+                        const weekMonth = getMonthForWeek(weekNum);
+
+                        if (weekMonth !== currentMonth || i === totalWeeks - 1) {
+                          // End of current month group
+                          const endIndex = i === totalWeeks - 1 && weekMonth === currentMonth ? i + 1 : i;
+                          const weekCount = endIndex - currentMonthStart;
+                          const monthDate = getWeekDate(currentMonthStart + 1);
+                          monthGroups.push({
+                            month: currentMonth,
+                            weekCount,
+                            monthDate
+                          });
+
+                          // Start new month group if not at the end
+                          if (i < totalWeeks - 1 || weekMonth !== currentMonth) {
+                            currentMonthStart = i;
+                            currentMonth = weekMonth;
+
+                            // Handle last week if it's a new month
+                            if (i === totalWeeks - 1 && weekMonth !== monthGroups[monthGroups.length - 1]?.month) {
+                              const lastMonthDate = getWeekDate(weekNum);
+                              monthGroups.push({
+                                month: weekMonth,
+                                weekCount: 1,
+                                monthDate: lastMonthDate
+                              });
+                            }
+                          }
+                        }
+                      }
+
+                      return monthGroups.map((group, idx) => (
+                        <div
+                          key={idx}
+                          className={`text-center text-sm font-semibold border-l-4 border-blue-600 px-2 py-1 ${
+                            group.month % 2 === 0 ? 'bg-blue-50' : 'bg-blue-100'
+                          }`}
+                          style={{ minWidth: `${group.weekCount * 70}px`, flex: group.weekCount }}
+                        >
+                          <div className="text-blue-700">
+                            {group.monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  Array.from({ length: totalWeeks / weeksInMonth }, (_, i) => {
-                    const monthStart = getWeekDate(i * weeksInMonth + 1);
-                    return (
+                      ));
+                    })()}
+                  </div>
+                </div>
+                {/* Week dates row */}
+                <div className="flex mb-4">
+                  <div className="w-64 flex-shrink-0"></div>
+                  <div className="flex flex-1">
+                    {Array.from({ length: totalWeeks }, (_, i) => {
+                      const weekNum = i + 1;
+                      const weekDate = getWeekDate(weekNum);
+                      const currentMonth = getMonthForWeek(weekNum);
+                      const prevMonth = i > 0 ? getMonthForWeek(weekNum - 1) : -1;
+                      const isMonthStart = currentMonth !== prevMonth;
+
+                      return (
+                        <div
+                          key={i}
+                          className={`flex-1 text-center text-xs font-medium border-l px-1 ${
+                            isMonthStart ? 'border-l-4 border-l-blue-600' : 'border-slate-200'
+                          } ${currentMonth % 2 === 0 ? 'bg-slate-50' : 'bg-white'}`}
+                          style={{ minWidth: '70px' }}
+                        >
+                          <div className="text-slate-600">
+                            {String(weekDate.getDate()).padStart(2, '0')}/{String(weekDate.getMonth() + 1).padStart(2, '0')}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+            {viewMode === 'monthly' && (
+              <div className="flex mb-4">
+                <div className="w-64 flex-shrink-0"></div>
+                <div className="flex flex-1">
+                  {(() => {
+                    // Generate actual calendar months
+                    const months = [];
+                    let currentDate = new Date(startDate);
+                    // Go to first day of start month
+                    currentDate.setDate(1);
+
+                    const endWeekDate = getWeekDate(totalWeeks);
+
+                    while (currentDate <= endWeekDate) {
+                      months.push(new Date(currentDate));
+                      currentDate.setMonth(currentDate.getMonth() + 1);
+                    }
+
+                    return months.map((monthDate, i) => (
                       <div
                         key={i}
                         className={`flex-1 text-center text-sm font-semibold border-l-4 border-blue-600 px-2 ${
                           i % 2 === 0 ? 'bg-slate-50' : 'bg-white'
                         }`}
-                        style={{ minWidth: '280px' }}
+                        style={{ minWidth: '120px' }}
                       >
                         <div className="text-blue-700">
-                          {monthStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                          {monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                         </div>
                       </div>
-                    );
-                  })
-                )}
+                    ));
+                  })()}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Tasks */}
-            {tasks.map((task) => {
+            {filteredTasks.length === 0 && tasks.length > 0 && (
+              <div className="py-8 text-center text-slate-500">
+                <p>No tasks match the current filter.</p>
+                <button
+                  onClick={() => {
+                    setFilterStatus('all');
+                    setFilterColors([]);
+                  }}
+                  className="mt-2 text-blue-600 hover:text-blue-800 underline text-sm"
+                >
+                  Clear filters
+                </button>
+              </div>
+            )}
+            {filteredTasks.map((task) => {
               const blockingTasks = getBlockingTasks(task);
               const endWeek = task.startWeek + task.duration - 1;
               const dateRange = formatDateRange(task.startWeek, task.duration);
@@ -1047,7 +1478,7 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
               return (
                 <div
                   key={task.id}
-                  className={`mb-3 transition-all ${isBeingDragged ? 'opacity-50' : ''} ${isDropTarget ? 'border-t-2 border-blue-500' : ''} ${task.done ? 'bg-green-50 rounded-lg' : ''}`}
+                  className={`mb-3 transition-all ${isBeingDragged ? 'opacity-50' : ''} ${isDropTarget ? 'border-t-2 border-blue-500' : ''} ${task.done ? 'bg-green-50 rounded-lg -mx-2 px-2 py-1' : ''}`}
                   draggable={!isDraggingTimeline && !isResizing && !isEditing}
                   onDragStart={(e) => !isDraggingTimeline && !isResizing && !isEditing && handleDragStart(e, task)}
                   onDragOver={(e) => !isDraggingTimeline && !isResizing && handleDragOver(e, task)}
@@ -1109,12 +1540,32 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                           <div className="text-xs text-slate-500">
                             {dateRange}
                           </div>
+                          {task.notes && (
+                            <div
+                              className="text-xs text-slate-500 mt-1 truncate cursor-pointer hover:text-blue-600"
+                              title={task.notes}
+                              onClick={() => startEditingNotes(task)}
+                            >
+                              <span className="mr-1">Notes:</span>
+                              {task.notes.substring(0, 30)}{task.notes.length > 30 ? '...' : ''}
+                            </div>
+                          )}
+                          {!task.notes && (
+                            <button
+                              onClick={() => startEditingNotes(task)}
+                              className="text-xs text-slate-400 mt-1 hover:text-blue-600 transition"
+                            >
+                              + Add notes
+                            </button>
+                          )}
                           {blockingTasks.length > 0 && (
                             <div className="flex items-center gap-1 mt-1 text-xs text-amber-600 group relative">
                               <AlertCircle className="w-3 h-3" />
                               <span className="cursor-help">Blocked by: {blockingTasks.length}</span>
-                              <div className="absolute left-0 bottom-full mb-1 hidden group-hover:block bg-slate-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50">
-                                {blockingTasks.map(t => t.name).join(', ')}
+                              <div className="absolute right-0 top-full mt-2 hidden group-hover:block bg-slate-800 text-white text-sm rounded-lg px-3 py-2 shadow-lg z-[60] min-w-[150px]">
+                                <div className="flex flex-col gap-1">
+                                  {blockingTasks.map(t => <div key={t.id}>{t.name}</div>)}
+                                </div>
                               </div>
                             </div>
                           )}
@@ -1152,31 +1603,48 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                     {/* Timeline Bar */}
                     <div
                       ref={(el) => timelineRefs.current[task.id] = el}
-                      className="flex flex-1 relative h-12"
+                      className="flex flex-1 relative h-12 overflow-hidden"
                     >
-                      {Array.from({ length: totalWeeks }, (_, i) => {
-                        const weekNum = i + 1;
-                        const currentMonth = getMonthForWeek(weekNum);
-                        const prevMonth = i > 0 ? getMonthForWeek(weekNum - 1) : -1;
-                        const isMonthStart = currentMonth !== prevMonth;
+                      {viewMode === 'weekly' ? (
+                        Array.from({ length: totalWeeks }, (_, i) => {
+                          const weekNum = i + 1;
+                          const currentMonth = getMonthForWeek(weekNum);
+                          const prevMonth = i > 0 ? getMonthForWeek(weekNum - 1) : -1;
+                          const isMonthStart = currentMonth !== prevMonth;
 
-                        return (
+                          return (
+                            <div
+                              key={i}
+                              className={`flex-1 border-l ${
+                                isMonthStart ? 'border-l-4 border-l-blue-600' : 'border-slate-200'
+                              } ${currentMonth % 2 === 0 ? 'bg-slate-50' : 'bg-white'}`}
+                              style={{ minWidth: '70px' }}
+                            ></div>
+                          );
+                        })
+                      ) : (
+                        // Monthly view grid
+                        getMonthColumns().map((monthDate, i) => (
                           <div
                             key={i}
-                            className={`flex-1 border-l ${
-                              isMonthStart ? 'border-l-4 border-l-blue-600' : 'border-slate-200'
-                            } ${currentMonth % 2 === 0 ? 'bg-slate-50' : 'bg-white'}`}
-                            style={{ minWidth: viewMode === 'weekly' ? '70px' : '70px' }}
+                            className={`flex-1 border-l-4 border-blue-600 ${
+                              i % 2 === 0 ? 'bg-slate-50' : 'bg-white'
+                            }`}
+                            style={{ minWidth: '120px' }}
                           ></div>
-                        );
-                      })}
+                        ))
+                      )}
                       <div
-                        className={`absolute top-1 ${task.color} text-white rounded-lg shadow-md flex items-center justify-center text-sm font-medium hover:shadow-lg transition select-none ${
+                        className={`absolute top-1 z-10 ${task.color} text-white rounded-lg shadow-md flex items-center justify-center text-sm font-medium hover:shadow-lg transition select-none ${
                           isDraggingTimeline && draggedTask?.id === task.id ? 'shadow-2xl ring-2 ring-white' : ''
                         } ${isResizing && draggedTask?.id === task.id ? 'shadow-2xl ring-2 ring-white' : ''}`}
-                        style={{
+                        style={viewMode === 'weekly' ? {
                           left: `${((task.startWeek - 1) / totalWeeks) * 100}%`,
                           width: `${(task.duration / totalWeeks) * 100}%`,
+                          height: '40px',
+                        } : {
+                          left: `${getMonthlyTaskPosition(task).left}%`,
+                          width: `${getMonthlyTaskPosition(task).width}%`,
                           height: '40px',
                         }}
                       >
@@ -1288,12 +1756,13 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
           <div
             id="dependency-diagram"
             className="relative border-2 border-slate-200 rounded-lg bg-slate-50 overflow-hidden"
-            style={{ height: '500px', position: 'relative', cursor: isPanningDiagram ? 'grabbing' : 'default' }}
+            style={{ height: '500px', position: 'relative', cursor: isBoxSelecting ? 'crosshair' : (isPanningDiagram ? 'grabbing' : 'grab') }}
             onMouseDown={handleDiagramMouseDown}
             onMouseMove={handleDiagramMouseMove}
             onMouseUp={handleDiagramMouseUp}
             onMouseLeave={handleDiagramMouseUp}
             onWheel={handleDiagramWheel}
+            onContextMenu={handleDiagramContextMenu}
           >
             {/* Pan/Zoom wrapper */}
             <div
@@ -1305,6 +1774,20 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                 position: 'relative'
               }}
             >
+            {/* Task 2: Box selection rectangle */}
+            {isBoxSelecting && (
+              <div
+                className="absolute bg-blue-500 bg-opacity-20 border-2 border-blue-500 border-dashed pointer-events-none"
+                style={{
+                  left: `${Math.min(boxStart.x, boxEnd.x)}px`,
+                  top: `${Math.min(boxStart.y, boxEnd.y)}px`,
+                  width: `${Math.abs(boxEnd.x - boxStart.x)}px`,
+                  height: `${Math.abs(boxEnd.y - boxStart.y)}px`,
+                  zIndex: 50
+                }}
+              />
+            )}
+
             {/* Task nodes */}
             {tasks.map(task => {
               const pos = nodePositions[task.id];
@@ -1315,6 +1798,8 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
               const isConnectionTarget = connectingFrom && connectingFrom !== task.id;
               const isHoveredForConnection = hoveredNodeForConnection === task.id;
               const isConnectionSource = connectingFrom === task.id;
+              // Task 1 & 2: Check if node is selected (single or multi)
+              const isSelected = selectedNodeId === task.id || selectedNodeIds.has(task.id);
 
               return (
                 <div
@@ -1345,7 +1830,9 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                       : 'cursor-move hover:shadow-xl'
                   } ${
                     isHoveredForConnection ? 'ring-4 ring-green-400 ring-offset-2 scale-105' : ''
-                  } ${isDragging ? 'opacity-70 cursor-grabbing' : ''} ${task.done && !isConnectionSource && !isHoveredForConnection ? 'ring-2 ring-green-300' : ''}`}
+                  } ${isDragging ? 'opacity-70 cursor-grabbing' : ''} ${task.done && !isConnectionSource && !isHoveredForConnection && !isSelected ? 'ring-2 ring-green-300' : ''} ${
+                    isSelected && !isConnectionSource && !isHoveredForConnection ? 'ring-4 ring-blue-500 ring-offset-2' : ''
+                  }`}
                   style={{
                     left: `${pos.x}px`,
                     top: `${pos.y}px`,
@@ -1369,7 +1856,7 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                   {/* Add dependency "+" button */}
                   {!connectingFrom && (
                     <button
-                      className="connect-btn absolute bottom-1 right-1 w-6 h-6 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white transition border-2 border-white shadow-md text-sm font-bold leading-none"
+                      className="connect-btn absolute bottom-1 right-1 w-6 h-6 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white transition border-2 border-white shadow-md text-sm font-bold leading-none z-[70]"
                       onClick={(e) => startConnection(task.id, e)}
                       title="Connect to another task (creates dependency)"
                     >
@@ -1384,8 +1871,10 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                   {task.blockedBy.length > 0 && (
                     <div className="text-xs mt-1 opacity-90 group relative">
                       <span className="cursor-help">Blocked by: {task.blockedBy.length}</span>
-                      <div className="absolute left-0 bottom-full mb-1 hidden group-hover:block bg-slate-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50">
-                        {blockingTasksInDiagram.map(t => t.name).join(', ')}
+                      <div className="absolute right-0 top-full mt-2 hidden group-hover:block bg-slate-800 text-white text-sm rounded-lg px-3 py-2 shadow-lg z-[60] min-w-[150px]">
+                        <div className="flex flex-col gap-1">
+                          {blockingTasksInDiagram.map(t => <div key={t.id}>{t.name}</div>)}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1619,9 +2108,12 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
             <strong>How to use:</strong>
             <ul className="list-disc list-inside mt-2 space-y-1">
               <li><strong>To move nodes:</strong> Click and drag any node to reposition it in the diagram</li>
-              <li><strong>To pan diagram:</strong> Hold middle mouse button and drag to move the entire view</li>
+              <li><strong>To move with dependencies:</strong> Click a node to select it, then use arrow keys (hold Shift for larger moves) - connected tasks move together</li>
+              <li><strong>To select multiple:</strong> Hold Shift and drag to draw a selection box around multiple nodes</li>
+              <li><strong>To create task on canvas:</strong> Right-click on empty space and select "Create task here"</li>
+              <li><strong>To pan diagram:</strong> Click and drag on empty space, or use middle mouse button</li>
               <li><strong>To zoom:</strong> Use the +/− buttons or hold Ctrl and scroll mouse wheel</li>
-              <li><strong>To remove from diagram:</strong> Click the × button (task stays in timeline, only removed from diagram view)</li>
+              <li><strong>To remove from diagram:</strong> Click the x button (task stays in timeline, only removed from diagram view)</li>
               <li><strong>To add dependencies:</strong> Click the + button on a task, then click another task to connect them (the second task will be blocked by the first)</li>
               <li><strong>To delete a dependency:</strong> Right-click on any arrow and confirm deletion</li>
               <li><strong>Auto-Arrange:</strong> Organizes nodes in a tree layout based on dependencies</li>
@@ -1697,6 +2189,19 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                     ))}
                   </div>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Notes (optional)
+                  </label>
+                  <textarea
+                    value={newTask.notes}
+                    onChange={(e) => setNewTask({ ...newTask, notes: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Add notes or description"
+                    rows={3}
+                  />
+                </div>
               </div>
 
               <div className="flex gap-3 mt-6">
@@ -1750,6 +2255,48 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
                     setShowColorPicker(false);
                     setColorPickerTask(null);
                   }}
+                  className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-300 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Notes Edit Modal */}
+        {editingNotesTask && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full">
+              <h2 className="text-2xl font-bold text-slate-800 mb-4">
+                Edit Notes: {editingNotesTask.name}
+              </h2>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Notes
+                  </label>
+                  <textarea
+                    value={editingNotesValue}
+                    onChange={(e) => setEditingNotesValue(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Add notes or description"
+                    rows={5}
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={saveTaskNotes}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
+                >
+                  Save Notes
+                </button>
+                <button
+                  onClick={cancelEditingNotes}
                   className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-300 transition"
                 >
                   Cancel
@@ -1890,6 +2437,26 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
             </div>
           );
         })()}
+
+        {/* Task 3: Canvas Context Menu for creating tasks */}
+        {canvasContextMenu && (
+          <div
+            className="canvas-context-menu fixed bg-white rounded-lg shadow-xl border py-2 z-[100]"
+            style={{ left: canvasContextMenu.x, top: canvasContextMenu.y }}
+          >
+            <button
+              onClick={() => {
+                setNewTaskPosition({ x: canvasContextMenu.diagramX, y: canvasContextMenu.diagramY });
+                setShowAddTask(true);
+                setCanvasContextMenu(null);
+              }}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-slate-100 flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Create task here
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
