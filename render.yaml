@@ -10,7 +10,6 @@ services:
     name: planner-api
     runtime: node
     plan: free
-    region: oregon
     rootDir: server
     buildCommand: npm install
     startCommand: npm start
@@ -20,11 +19,6 @@ services:
         fromDatabase:
           name: planner-db
           property: connectionString
-      - key: CLIENT_URL
-        fromService:
-          name: planner-client
-          type: web
-          property: url
       - key: NODE_ENV
         value: production
 
