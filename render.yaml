@@ -1,7 +1,6 @@
 databases:
   - name: planner-db
     databaseName: planner
-    plan: free
     region: oregon
 
 services:
