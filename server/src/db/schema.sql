@@ -9,3 +9,6 @@ CREATE TABLE IF NOT EXISTS timelines (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Migration: Add notes column if it doesn't exist (for existing databases)
+ALTER TABLE timelines ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT '';
