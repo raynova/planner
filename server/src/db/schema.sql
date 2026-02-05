@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS timelines (
   start_date DATE DEFAULT CURRENT_DATE,
   tasks JSONB DEFAULT '[]',
   node_positions JSONB DEFAULT '{}',
+  notes TEXT DEFAULT '',
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );

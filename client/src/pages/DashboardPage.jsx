@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Plus, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
+import { formatDateDDMMYYYY } from '../utils/dateUtils';
 
 export default function DashboardPage() {
   const [timelines, setTimelines] = useState([]);
@@ -71,11 +72,7 @@ export default function DashboardPage() {
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    return formatDateDDMMYYYY(new Date(dateString));
   };
 
   if (loading) {

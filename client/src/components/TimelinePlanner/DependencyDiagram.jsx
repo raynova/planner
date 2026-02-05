@@ -154,7 +154,7 @@ export default function DependencyDiagram({
       <div
         id="dependency-diagram"
         className="relative border-2 border-slate-200 rounded-lg bg-slate-50 overflow-hidden"
-        style={{ height: '500px', position: 'relative', cursor: isBoxSelecting ? 'crosshair' : (isPanningDiagram ? 'grabbing' : 'grab') }}
+        style={{ height: '500px', position: 'relative', cursor: isBoxSelecting ? 'crosshair' : (isPanningDiagram ? 'grabbing' : 'default') }}
         onMouseDown={handleDiagramMouseDown}
         onMouseMove={handleDiagramMouseMove}
         onMouseUp={handleDiagramMouseUp}
@@ -396,9 +396,9 @@ export default function DependencyDiagram({
         <ul className="list-disc list-inside mt-2 space-y-1">
           <li><strong>To move nodes:</strong> Click and drag any node to reposition it in the diagram</li>
           <li><strong>To move with dependencies:</strong> Click a node to select it, then use arrow keys (hold Shift for larger moves) - connected tasks move together</li>
-          <li><strong>To select multiple:</strong> Hold Shift and drag to draw a selection box around multiple nodes</li>
+          <li><strong>To select multiple:</strong> Click and drag on empty space to draw a selection box around multiple nodes</li>
           <li><strong>To create task on canvas:</strong> Right-click on empty space and select "Create task here"</li>
-          <li><strong>To pan diagram:</strong> Click and drag on empty space, or use middle mouse button</li>
+          <li><strong>To pan diagram:</strong> Use middle mouse button or right-click and drag</li>
           <li><strong>To zoom:</strong> Use the +/− buttons or hold Ctrl and scroll mouse wheel</li>
           <li><strong>To remove from diagram:</strong> Click the x button (task stays in timeline, only removed from diagram view)</li>
           <li><strong>To add dependencies:</strong> Click the + button on a task, then click another task to connect them (the second task will be blocked by the first)</li>

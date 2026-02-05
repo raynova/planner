@@ -396,8 +396,8 @@ export function useDiagramInteraction({
       setIsPanningDiagram(true);
       setPanStart({ x: e.clientX - diagramPan.x, y: e.clientY - diagramPan.y });
     }
-    // Shift + Left click - box selection
-    else if (e.button === 0 && e.shiftKey && !e.target.closest('[data-task-node]')) {
+    // Left click on empty canvas - start box selection
+    else if (e.button === 0 && !e.target.closest('[data-task-node]')) {
       e.preventDefault();
       const diagramArea = document.getElementById('dependency-diagram');
       if (!diagramArea) return;
@@ -408,10 +408,6 @@ export function useDiagramInteraction({
       setIsBoxSelecting(true);
       setBoxStart({ x, y });
       setBoxEnd({ x, y });
-    }
-    // Left click on empty canvas - clear selection only (no panning)
-    else if (e.button === 0 && !e.target.closest('[data-task-node]')) {
-      e.preventDefault();
       setSelectedNodeIds(new Set());
       setSelectedNodeId(null);
     }

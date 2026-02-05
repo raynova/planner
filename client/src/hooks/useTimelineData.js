@@ -16,6 +16,7 @@ export function useTimelineData({ initialData, onSave, onSocketSync }) {
   const [timelineName, setTimelineName] = useState(initialData?.name || 'My Timeline');
   const [tasks, setTasks] = useState(initialData?.tasks || []);
   const [nodePositions, setNodePositions] = useState(initialData?.node_positions || {});
+  const [notes, setNotes] = useState(initialData?.notes || '');
   const [saveStatus, setSaveStatus] = useState('');
 
   // Track remote updates
@@ -26,12 +27,14 @@ export function useTimelineData({ initialData, onSave, onSocketSync }) {
   const nodePositionsRef = useRef(nodePositions);
   const startDateRef = useRef(startDate);
   const timelineNameRef = useRef(timelineName);
+  const notesRef = useRef(notes);
 
   // Keep refs in sync
   useEffect(() => { tasksRef.current = tasks; }, [tasks]);
   useEffect(() => { nodePositionsRef.current = nodePositions; }, [nodePositions]);
   useEffect(() => { startDateRef.current = startDate; }, [startDate]);
   useEffect(() => { timelineNameRef.current = timelineName; }, [timelineName]);
+  useEffect(() => { notesRef.current = notes; }, [notes]);
 
   // Sync state from initialData when it changes due to remote updates
   useEffect(() => {
@@ -41,12 +44,13 @@ export function useTimelineData({ initialData, onSave, onSocketSync }) {
       setNodePositions(initialData.node_positions || {});
       setTimelineName(initialData.name || 'My Timeline');
       setStartDate(initialData.start_date ? new Date(initialData.start_date) : new Date());
+      setNotes(initialData.notes || '');
       setLastRemoteUpdate(initialData._remoteUpdate);
     }
   }, [initialData, lastRemoteUpdate]);
 
   // Save data function
-  const saveData = useCallback(async (newTasks, newStartDate, newTimelineName, newNodePositions) => {
+  const saveData = useCallback(async (newTasks, newStartDate, newTimelineName, newNodePositions, newNotes) => {
     try {
       setSaveStatus('Saving...');
       const data = {
@@ -54,6 +58,7 @@ export function useTimelineData({ initialData, onSave, onSocketSync }) {
         startDate: (newStartDate || startDateRef.current).toISOString().split('T')[0],
         name: newTimelineName !== undefined ? newTimelineName : timelineNameRef.current,
         nodePositions: newNodePositions !== undefined ? newNodePositions : nodePositionsRef.current,
+        notes: newNotes !== undefined ? newNotes : notesRef.current,
       };
       await onSave(data);
       setSaveStatus('Saved');
@@ -85,6 +90,8 @@ export function useTimelineData({ initialData, onSave, onSocketSync }) {
     setTasks,
     nodePositions,
     setNodePositions,
+    notes,
+    setNotes,
     saveStatus,
 
     // Refs (for event handlers to avoid stale closures)
@@ -92,6 +99,7 @@ export function useTimelineData({ initialData, onSave, onSocketSync }) {
     nodePositionsRef,
     startDateRef,
     timelineNameRef,
+    notesRef,
 
     // Functions
     saveData,

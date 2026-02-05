@@ -193,7 +193,7 @@ export default function TimelineGrid({
           return (
             <div
               key={task.id}
-              className={`mb-3 transition-all ${isBeingDragged ? 'opacity-50' : ''} ${isDropTarget ? 'border-t-2 border-blue-500' : ''} ${task.done ? 'bg-green-50 rounded-lg -mx-2 px-2 py-1' : ''}`}
+              className={`mb-3 transition-all ${isBeingDragged ? 'opacity-50' : ''} ${isDropTarget ? 'border-t-2 border-blue-500' : ''} ${task.done ? 'bg-green-100 rounded-lg -mx-2 px-2 py-1' : ''}`}
               draggable={!isDraggingTimeline && !isResizing && !isEditing}
               onDragStart={(e) => !isDraggingTimeline && !isResizing && !isEditing && handleDragStart(e, task)}
               onDragOver={(e) => !isDraggingTimeline && !isResizing && handleDragOver(e, task)}
@@ -329,7 +329,7 @@ export default function TimelineGrid({
                           key={i}
                           className={`flex-1 border-l ${
                             isMonthStart ? 'border-l-4 border-l-blue-600' : 'border-slate-200'
-                          } ${currentMonth % 2 === 0 ? 'bg-slate-50' : 'bg-white'}`}
+                          } ${task.done ? 'bg-transparent' : (currentMonth % 2 === 0 ? 'bg-slate-50' : 'bg-white')}`}
                           style={{ minWidth: '70px' }}
                         ></div>
                       );
@@ -339,7 +339,7 @@ export default function TimelineGrid({
                       <div
                         key={i}
                         className={`flex-1 border-l-4 border-blue-600 ${
-                          i % 2 === 0 ? 'bg-slate-50' : 'bg-white'
+                          task.done ? 'bg-transparent' : (i % 2 === 0 ? 'bg-slate-50' : 'bg-white')
                         }`}
                         style={{ minWidth: '120px' }}
                       ></div>

@@ -19,17 +19,18 @@ router.get('/', async (req, res) => {
 // Create new timeline (public - no auth)
 router.post('/', async (req, res) => {
   try {
-    const { name, startDate, tasks, nodePositions } = req.body;
+    const { name, startDate, tasks, nodePositions, notes } = req.body;
 
     const result = await pool.query(
-      `INSERT INTO timelines (name, start_date, tasks, node_positions)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO timelines (name, start_date, tasks, node_positions, notes)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
       [
         name || 'My Timeline',
         startDate || new Date().toISOString().split('T')[0],
         JSON.stringify(tasks || []),
-        JSON.stringify(nodePositions || {})
+        JSON.stringify(nodePositions || {}),
+        notes || ''
       ]
     );
 
@@ -65,7 +66,7 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, startDate, tasks, nodePositions } = req.body;
+    const { name, startDate, tasks, nodePositions, notes } = req.body;
 
     // Build dynamic update query
     const updates = [];
@@ -87,6 +88,10 @@ router.put('/:id', async (req, res) => {
     if (nodePositions !== undefined) {
       updates.push(`node_positions = $${paramCount++}`);
       values.push(JSON.stringify(nodePositions));
+    }
+    if (notes !== undefined) {
+      updates.push(`notes = $${paramCount++}`);
+      values.push(notes);
     }
 
     if (updates.length === 0) {

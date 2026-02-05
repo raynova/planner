@@ -23,6 +23,7 @@ export default function TimelinePage() {
         node_positions: data.nodePositions,
         name: data.name,
         start_date: data.startDate,
+        notes: data.notes,
         // Use a unique marker to indicate this is a remote update
         _remoteUpdate: Date.now(),
       };

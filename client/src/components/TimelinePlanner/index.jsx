@@ -10,6 +10,7 @@ import { useTimelineBar } from '../../hooks/useTimelineBar';
 import TimelineHeader from './TimelineHeader';
 import TimelineGrid from './TimelineGrid';
 import DependencyDiagram from './DependencyDiagram';
+import TimelineNotes from './TimelineNotes';
 import {
   AddTaskModal,
   ColorPickerModal,
@@ -45,6 +46,8 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
     setTasks,
     nodePositions,
     setNodePositions,
+    notes,
+    setNotes,
     saveStatus,
     tasksRef,
     nodePositionsRef,
@@ -158,6 +161,11 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
     saveData(tasks, startDate, timelineName, nodePositions);
   };
 
+  // Save timeline notes
+  const handleSaveNotes = (newNotes) => {
+    saveData(tasks, startDate, timelineName, nodePositions, newNotes);
+  };
+
   return (
     <div className="p-8">
       <div className="max-w-7xl mx-auto">
@@ -176,6 +184,7 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
           setFilterColors={setFilterColors}
           onSaveName={handleSaveName}
           onShowAddTask={() => setShowAddTask(true)}
+          onClearFilters={handleClearFilters}
         />
 
         {/* Timeline Grid */}
@@ -253,6 +262,13 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
           resetView={diagramInteraction.resetView}
           setNewTaskPosition={taskOps.setNewTaskPosition}
           setShowAddTask={setShowAddTask}
+        />
+
+        {/* Timeline Notes */}
+        <TimelineNotes
+          notes={notes}
+          setNotes={setNotes}
+          onSave={handleSaveNotes}
         />
 
         {/* Modals */}
