@@ -22,6 +22,9 @@ export function useTimelineData({ initialData, onSave, onSocketSync }) {
   // Track remote updates
   const [lastRemoteUpdate, setLastRemoteUpdate] = useState(null);
 
+  // Track if initial data has been synced (handles async loading)
+  const [hasInitialized, setHasInitialized] = useState(false);
+
   // Refs to avoid stale closures in event handlers
   const tasksRef = useRef(tasks);
   const nodePositionsRef = useRef(nodePositions);
@@ -48,6 +51,18 @@ export function useTimelineData({ initialData, onSave, onSocketSync }) {
       setLastRemoteUpdate(initialData._remoteUpdate);
     }
   }, [initialData, lastRemoteUpdate]);
+
+  // Sync state from initialData when it first arrives (after async load)
+  useEffect(() => {
+    if (initialData && !hasInitialized && !initialData._remoteUpdate) {
+      setTasks(initialData.tasks || []);
+      setNodePositions(initialData.node_positions || {});
+      setTimelineName(initialData.name || 'My Timeline');
+      setStartDate(initialData.start_date ? new Date(initialData.start_date) : new Date());
+      setNotes(initialData.notes || '');
+      setHasInitialized(true);
+    }
+  }, [initialData, hasInitialized]);
 
   // Save data function
   const saveData = useCallback(async (newTasks, newStartDate, newTimelineName, newNodePositions, newNotes) => {

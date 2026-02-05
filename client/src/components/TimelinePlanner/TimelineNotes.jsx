@@ -78,7 +78,6 @@ export default function TimelineNotes({ notes, setNotes, onSave }) {
             value={localValue}
             onChange={(e) => setLocalValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            onBlur={handleSave}
             className="w-full h-32 p-3 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none resize-none text-slate-700"
             placeholder="Add notes about this timeline..."
           />
