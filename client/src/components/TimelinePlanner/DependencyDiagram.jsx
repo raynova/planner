@@ -39,7 +39,6 @@ export default function DependencyDiagram({
   handleDiagramMouseMove,
   handleDiagramMouseUp,
   handleDiagramContextMenu,
-  handleDiagramWheel,
   handleDeleteNodeFromDiagram,
   handleDeleteDependency,
   startConnection,
@@ -166,7 +165,6 @@ export default function DependencyDiagram({
         onMouseMove={handleDiagramMouseMove}
         onMouseUp={handleDiagramMouseUp}
         onMouseLeave={handleDiagramMouseUp}
-        onWheel={handleDiagramWheel}
         onContextMenu={handleDiagramContextMenu}
       >
         {/* Pan/Zoom wrapper */}

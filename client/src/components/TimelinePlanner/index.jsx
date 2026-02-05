@@ -264,7 +264,6 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
           handleDiagramMouseMove={diagramInteraction.handleDiagramMouseMove}
           handleDiagramMouseUp={diagramInteraction.handleDiagramMouseUp}
           handleDiagramContextMenu={diagramInteraction.handleDiagramContextMenu}
-          handleDiagramWheel={diagramInteraction.handleDiagramWheel}
           handleDeleteNodeFromDiagram={diagramInteraction.handleDeleteNodeFromDiagram}
           handleDeleteDependency={diagramInteraction.handleDeleteDependency}
           startConnection={diagramInteraction.startConnection}

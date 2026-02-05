@@ -140,7 +140,7 @@ export function useDiagramInteraction({
     return () => document.removeEventListener('click', handleClick);
   }, [arrowContextMenu, canvasContextMenu]);
 
-  // Prevent browser zoom in diagram area
+  // Handle ctrl+scroll zoom in diagram area (and prevent browser zoom)
   useEffect(() => {
     const diagramElement = document.getElementById('dependency-diagram');
     if (!diagramElement) return;
@@ -148,7 +148,8 @@ export function useDiagramInteraction({
     const handleWheel = (e) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
-        e.stopPropagation();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        setDiagramZoom(prev => Math.max(0.25, Math.min(3, prev + delta)));
       }
     };
 
@@ -156,20 +157,6 @@ export function useDiagramInteraction({
     return () => diagramElement.removeEventListener('wheel', handleWheel);
   }, []);
 
-  // Prevent browser zoom globally when hovering over diagram
-  useEffect(() => {
-    const handleGlobalWheel = (e) => {
-      if (e.ctrlKey || e.metaKey) {
-        const diagramElement = document.getElementById('dependency-diagram');
-        if (diagramElement && diagramElement.contains(e.target)) {
-          e.preventDefault();
-        }
-      }
-    };
-
-    document.addEventListener('wheel', handleGlobalWheel, { passive: false });
-    return () => document.removeEventListener('wheel', handleGlobalWheel);
-  }, []);
 
   // Node mouse down handler
   const handleNodeMouseDown = useCallback((e, taskId) => {
@@ -480,14 +467,6 @@ export function useDiagramInteraction({
     }
   }, [diagramPan, diagramZoom]);
 
-  const handleDiagramWheel = useCallback((e) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      e.stopPropagation();
-      const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      setDiagramZoom(prev => Math.max(0.25, Math.min(3, prev + delta)));
-    }
-  }, []);
 
   // Zoom controls
   const zoomIn = useCallback(() => {
@@ -604,7 +583,6 @@ export function useDiagramInteraction({
     handleDiagramMouseMove,
     handleDiagramMouseUp,
     handleDiagramContextMenu,
-    handleDiagramWheel,
     zoomIn,
     zoomOut,
     resetView,

@@ -285,7 +285,7 @@ export default function TimelineGrid({
                         </div>
                       )}
                     </div>
-                    <div className="flex gap-1 items-center">
+                    <div className="flex gap-1 items-center flex-shrink-0">
                       <button
                         onClick={() => toggleTaskDone(task.id)}
                         className={`w-6 h-6 rounded border-2 flex items-center justify-center transition ${
