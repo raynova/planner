@@ -31,6 +31,7 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
   const [viewMode, setViewMode] = useState('weekly');
   const [isEditingName, setIsEditingName] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
+  const [hasInitialFit, setHasInitialFit] = useState(false);
 
   // Filter state
   const [filterStatus, setFilterStatus] = useState('all');
@@ -98,6 +99,17 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
   useEffect(() => {
     taskOps.initializeNodePositions();
   }, [tasks]);
+
+  // Auto-fit diagram view on initial load
+  useEffect(() => {
+    if (!hasInitialFit && Object.keys(nodePositions).length > 0) {
+      const timer = setTimeout(() => {
+        diagramInteraction.fitToView();
+        setHasInitialFit(true);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [nodePositions, hasInitialFit, diagramInteraction.fitToView]);
 
   // Filtered tasks based on status and color filters
   const filteredTasks = useMemo(() => {
@@ -260,6 +272,7 @@ export default function TimelinePlanner({ timelineId, initialData, onSave, onSoc
           zoomIn={diagramInteraction.zoomIn}
           zoomOut={diagramInteraction.zoomOut}
           resetView={diagramInteraction.resetView}
+          fitToView={diagramInteraction.fitToView}
           setNewTaskPosition={taskOps.setNewTaskPosition}
           setShowAddTask={setShowAddTask}
         />
