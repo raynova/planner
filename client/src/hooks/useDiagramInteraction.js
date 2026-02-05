@@ -536,10 +536,10 @@ export function useDiagramInteraction({
     const availableWidth = containerWidth - padding * 2;
     const availableHeight = containerHeight - padding * 2;
 
-    // Calculate zoom to fit (clamped to 0.25-1.5 range)
+    // Calculate zoom to fit (clamped to 0.25-1.0 range, never zoom in beyond 100%)
     const zoomX = availableWidth / contentWidth;
     const zoomY = availableHeight / contentHeight;
-    const zoom = Math.max(0.25, Math.min(1.5, Math.min(zoomX, zoomY)));
+    const zoom = Math.max(0.25, Math.min(1.0, Math.min(zoomX, zoomY)));
 
     // Calculate pan to center content
     const centerX = (minX + maxX) / 2;
