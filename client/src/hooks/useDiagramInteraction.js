@@ -103,8 +103,8 @@ export function useDiagramInteraction({
         connectedIds.forEach(id => {
           if (newPositions[id]) {
             newPositions[id] = {
-              x: Math.max(0, newPositions[id].x + dx),
-              y: Math.max(0, newPositions[id].y + dy)
+              x: newPositions[id].x + dx,
+              y: newPositions[id].y + dy
             };
           }
         });
@@ -204,8 +204,8 @@ export function useDiagramInteraction({
           const startP = startPositions[id];
           if (startP) {
             newPositions[id] = {
-              x: Math.max(0, startP.x + deltaX),
-              y: Math.max(0, startP.y + deltaY)
+              x: startP.x + deltaX,
+              y: startP.y + deltaY
             };
           }
         });
@@ -503,6 +503,55 @@ export function useDiagramInteraction({
     setDiagramZoom(1);
   }, []);
 
+  // Fit all nodes into view with appropriate zoom and centering
+  const fitToView = useCallback(() => {
+    const diagramElement = document.getElementById('dependency-diagram');
+    if (!diagramElement) return;
+
+    const positions = Object.values(nodePositions);
+    if (positions.length === 0) {
+      setDiagramPan({ x: 0, y: 0 });
+      setDiagramZoom(1);
+      return;
+    }
+
+    // Calculate bounding box of all nodes
+    let minX = Infinity, minY = Infinity;
+    let maxX = -Infinity, maxY = -Infinity;
+
+    positions.forEach(pos => {
+      minX = Math.min(minX, pos.x);
+      minY = Math.min(minY, pos.y);
+      maxX = Math.max(maxX, pos.x + NODE_WIDTH);
+      maxY = Math.max(maxY, pos.y + NODE_HEIGHT);
+    });
+
+    const contentWidth = maxX - minX;
+    const contentHeight = maxY - minY;
+
+    const containerWidth = diagramElement.clientWidth;
+    const containerHeight = diagramElement.clientHeight;
+
+    const padding = 50;
+    const availableWidth = containerWidth - padding * 2;
+    const availableHeight = containerHeight - padding * 2;
+
+    // Calculate zoom to fit (clamped to 0.25-1.5 range)
+    const zoomX = availableWidth / contentWidth;
+    const zoomY = availableHeight / contentHeight;
+    const zoom = Math.max(0.25, Math.min(1.5, Math.min(zoomX, zoomY)));
+
+    // Calculate pan to center content
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    const panX = containerWidth / 2 - centerX * zoom;
+    const panY = containerHeight / 2 - centerY * zoom;
+
+    setDiagramZoom(zoom);
+    setDiagramPan({ x: panX, y: panY });
+  }, [nodePositions]);
+
   return {
     // Pan/zoom
     diagramPan,
@@ -559,5 +608,6 @@ export function useDiagramInteraction({
     zoomIn,
     zoomOut,
     resetView,
+    fitToView,
   };
 }
