@@ -204,7 +204,7 @@ export default function TimelineGrid({
                 {/* Task Info */}
                 <div className="w-64 flex-shrink-0 pr-4 cursor-move">
                   <div className="flex items-center justify-between">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className={`font-semibold flex items-center gap-2 ${task.done ? 'text-green-700' : 'text-slate-800'}`}>
                         <span className="text-slate-400">⋮⋮</span>
                         {editingTaskId === task.id ? (
@@ -244,7 +244,7 @@ export default function TimelineGrid({
                               e.stopPropagation();
                               startEditingTask(task.id, task.name);
                             }}
-                            className="cursor-text hover:text-blue-600 select-none"
+                            className="cursor-text hover:text-blue-600 select-none truncate block"
                             title="Double-click to rename"
                           >
                             {task.name}
